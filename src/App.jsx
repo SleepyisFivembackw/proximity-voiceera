@@ -1,10 +1,11 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import "./App.css";
 
 function App() {
   const [loggedIn, setLoggedIn] = useState(false);
   const [robloxName, setRobloxName] = useState("");
   const [robloxId, setRobloxId] = useState("");
+  const [micAccess, setMicAccess] = useState(null);
 
   const handleLogin = (e) => {
     e.preventDefault();
@@ -12,6 +13,14 @@ function App() {
       setLoggedIn(true);
     }
   };
+
+  useEffect(() => {
+    if (loggedIn && micAccess === null) {
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(() => setMicAccess(true))
+        .catch(() => setMicAccess(false));
+    }
+  }, [loggedIn, micAccess]);
 
   return (
     <div className="container">
@@ -34,6 +43,10 @@ function App() {
           />
           <button type="submit">Zaloguj się</button>
         </form>
+      ) : micAccess === null ? (
+        <div className="voice-connected">Proszę zezwolić na dostęp do mikrofonu...</div>
+      ) : micAccess === false ? (
+        <div className="voice-connected" style={{color: 'red'}}>Brak dostępu do mikrofonu!</div>
       ) : (
         <div className="voice-connected">
           <span className="dot" /> Voice connected
