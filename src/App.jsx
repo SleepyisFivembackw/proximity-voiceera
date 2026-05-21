@@ -46,9 +46,9 @@ function App() {
 
   // Znajdź siebie na liście graczy
   const me = players.find(p => String(p.userId) === String(robloxId));
-  // Lista graczy w zasięgu voice
+  // Lista graczy w zasięgu voice (niezależnie od ptt)
   const inRange = players.filter(p =>
-    p.ptt && p.position && me && distance(me.position, p.position) <= 43 && String(p.userId) !== String(robloxId)
+    p.position && me && distance(me.position, p.position) <= 43 && String(p.userId) !== String(robloxId)
   );
 
   return (
