@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import io from "socket.io-client";
+import Peer from "simple-peer";
 import "./App.css";
 
 function distance(a, b) {
@@ -10,12 +12,19 @@ function distance(a, b) {
   );
 }
 
+const SOCKET_URL = "https://proximity-voiceeraapi.onrender.com";
+
 function App() {
   const [loggedIn, setLoggedIn] = useState(false);
   const [robloxName, setRobloxName] = useState("");
   const [robloxId, setRobloxId] = useState("");
   const [micAccess, setMicAccess] = useState(null);
   const [players, setPlayers] = useState([]);
+  const [peers, setPeers] = useState({});
+  const [stream, setStream] = useState(null);
+  const socketRef = useRef();
+  const peersRef = useRef({});
+  const audioRefs = useRef({});
 
   const handleLogin = (e) => {
     e.preventDefault();
@@ -27,10 +36,54 @@ function App() {
   useEffect(() => {
     if (loggedIn && micAccess === null) {
       navigator.mediaDevices.getUserMedia({ audio: true })
-        .then(() => setMicAccess(true))
+        .then((s) => {
+          setMicAccess(true);
+          setStream(s);
+        })
         .catch(() => setMicAccess(false));
     }
   }, [loggedIn, micAccess]);
+
+  // Pobieranie listy graczy z backendu
+  // Socket.io + WebRTC logic
+  useEffect(() => {
+    if (loggedIn && micAccess && stream && robloxId) {
+      socketRef.current = io(SOCKET_URL);
+      socketRef.current.emit("join-voice", { userId: robloxId });
+
+      socketRef.current.on("user-joined", ({ userId }) => {
+        // Initiate peer connection if in range
+        if (!peersRef.current[userId] && userId !== String(robloxId)) {
+          createPeer(userId, true);
+        }
+      });
+
+      socketRef.current.on("signal", ({ fromUserId, signal }) => {
+        if (!peersRef.current[fromUserId]) {
+          createPeer(fromUserId, false);
+        }
+        peersRef.current[fromUserId]?.signal(signal);
+      });
+
+      socketRef.current.on("user-left", ({ userId }) => {
+        if (peersRef.current[userId]) {
+          peersRef.current[userId].destroy();
+          delete peersRef.current[userId];
+          setPeers((prev) => {
+            const copy = { ...prev };
+            delete copy[userId];
+            return copy;
+          });
+        }
+      });
+    }
+    // Cleanup
+    return () => {
+      Object.values(peersRef.current).forEach((peer) => peer.destroy());
+      if (socketRef.current) socketRef.current.disconnect();
+    };
+    // eslint-disable-next-line
+  }, [loggedIn, micAccess, stream, robloxId]);
 
   // Pobieranie listy graczy z backendu
   useEffect(() => {
@@ -43,6 +96,26 @@ function App() {
       return () => clearInterval(interval);
     }
   }, [loggedIn]);
+
+  // Peer connection logic
+  function createPeer(userId, initiator) {
+    if (!stream) return;
+    const peer = new Peer({ initiator, trickle: false, stream });
+    peer.on("signal", (signal) => {
+      socketRef.current.emit("signal", { targetUserId: userId, signal });
+    });
+    peer.on("stream", (remoteStream) => {
+      setPeers((prev) => ({ ...prev, [userId]: remoteStream }));
+    });
+    peer.on("close", () => {
+      setPeers((prev) => {
+        const copy = { ...prev };
+        delete copy[userId];
+        return copy;
+      });
+    });
+    peersRef.current[userId] = peer;
+  }
 
   // Znajdź siebie na liście graczy
   const me = players.find(p => String(p.userId) === String(robloxId));
@@ -88,6 +161,20 @@ function App() {
               ))}
             </ul>
           </div>
+          {/* Odtwarzanie dźwięku od graczy z aktywnym PTT */}
+          {Object.entries(peers).map(([userId, remoteStream]) => {
+            // znajdź gracza po userId
+            const player = players.find(p => String(p.userId) === String(userId));
+            // tylko jeśli gracz jest w zasięgu i ma ptt: true
+            if (!player || !player.ptt || !inRange.some(p => String(p.userId) === String(userId))) return null;
+            return (
+              <audio
+                key={userId}
+                ref={el => { if (el) el.srcObject = remoteStream; }}
+                autoPlay
+              />
+            );
+          })}
         </div>
       )}
     </div>
