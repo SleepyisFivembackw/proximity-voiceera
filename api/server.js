@@ -1,5 +1,7 @@
 const express = require('express');
 const cors = require('cors');
+const http = require('http');
+const { Server } = require('socket.io');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
@@ -33,6 +35,45 @@ app.get('/api/players', (req, res) => {
   res.json({ players: onlinePlayers });
 });
 
-app.listen(PORT, () => {
-  console.log(`API listening on port ${PORT}`);
+// --- SOCKET.IO ---
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST']
+  }
+});
+
+// Mapa userId -> socketId
+const userSockets = new Map();
+
+io.on('connection', (socket) => {
+  let userId = null;
+
+  socket.on('join-voice', (data) => {
+    userId = data.userId;
+    userSockets.set(userId, socket.id);
+    socket.broadcast.emit('user-joined', { userId });
+  });
+
+  socket.on('signal', (data) => {
+    const targetSocketId = userSockets.get(data.targetUserId);
+    if (targetSocketId) {
+      io.to(targetSocketId).emit('signal', {
+        fromUserId: userId,
+        signal: data.signal
+      });
+    }
+  });
+
+  socket.on('disconnect', () => {
+    if (userId) {
+      userSockets.delete(userId);
+      socket.broadcast.emit('user-left', { userId });
+    }
+  });
+});
+
+server.listen(PORT, () => {
+  console.log(`API + Socket.io listening on port ${PORT}`);
 });
