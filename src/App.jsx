@@ -16,20 +16,59 @@ function distance(a, b) {
 const SOCKET_URL = "https://proximity-voiceeraapi.onrender.com";
 
 function App() {
-    // --- Dynamiczne zarządzanie peerami na podstawie proximity i ptt ---
-    useEffect(() => {
-      if (!loggedIn || !micAccess || !stream) return;
-      // Dla każdego gracza w zasięgu i z ptt: true
-      inRange.forEach((p) => {
-        if (p.ptt && !peersRef.current[p.userId] && String(p.userId) !== String(robloxId)) {
-          createPeer(p.userId, true);
+  const [loggedIn, setLoggedIn] = useState(false);
+  const [robloxName, setRobloxName] = useState("");
+  const [robloxId, setRobloxId] = useState("");
+  const [micAccess, setMicAccess] = useState(null);
+  const [players, setPlayers] = useState([]);
+  const [peers, setPeers] = useState({});
+  const [stream, setStream] = useState(null);
+  const socketRef = useRef();
+  const peersRef = useRef({});
+  const audioRefs = useRef({});
+
+  const handleLogin = (e) => {
+    e.preventDefault();
+    if (robloxName && robloxId) {
+      setLoggedIn(true);
+    }
+  };
+
+  useEffect(() => {
+    if (loggedIn && micAccess === null) {
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then((s) => {
+          setMicAccess(true);
+          setStream(s);
+        })
+        .catch(() => setMicAccess(false));
+    }
+  }, [loggedIn, micAccess]);
+
+  // Pobieranie listy graczy z backendu
+  // Socket.io + WebRTC logic
+  useEffect(() => {
+    if (loggedIn && micAccess && stream && robloxId) {
+      socketRef.current = io(SOCKET_URL);
+      socketRef.current.emit("join-voice", { userId: robloxId });
+
+      socketRef.current.on("user-joined", ({ userId }) => {
+        // Initiate peer connection if in range
+        if (!peersRef.current[userId] && userId !== String(robloxId)) {
+          createPeer(userId, true);
         }
       });
-      // Usuwaj peer jeśli gracz wyszedł z zasięgu lub wyłączył ptt
-      Object.keys(peersRef.current).forEach((userId) => {
-        const player = players.find(p => String(p.userId) === String(userId));
-        if (!player || !player.ptt || !inRange.some(p => String(p.userId) === String(userId))) {
-          peersRef.current[userId]?.destroy();
+
+      socketRef.current.on("signal", ({ fromUserId, signal }) => {
+        if (!peersRef.current[fromUserId]) {
+          createPeer(fromUserId, false);
+        }
+        peersRef.current[fromUserId]?.signal(signal);
+      });
+
+      socketRef.current.on("user-left", ({ userId }) => {
+        if (peersRef.current[userId]) {
+          peersRef.current[userId].destroy();
           delete peersRef.current[userId];
           setPeers((prev) => {
             const copy = { ...prev };
@@ -38,8 +77,78 @@ function App() {
           });
         }
       });
-      // eslint-disable-next-line
-    }, [players, inRange, micAccess, stream, loggedIn]);
+    }
+    // Cleanup
+    return () => {
+      Object.values(peersRef.current).forEach((peer) => peer.destroy());
+      if (socketRef.current) socketRef.current.disconnect();
+    };
+    // eslint-disable-next-line
+  }, [loggedIn, micAccess, stream, robloxId]);
+
+  // Pobieranie listy graczy z backendu
+  useEffect(() => {
+    if (loggedIn) {
+      const interval = setInterval(() => {
+        fetch('https://proximity-voiceeraapi.onrender.com/api/players')
+          .then(res => res.json())
+          .then(data => setPlayers(data.players || []));
+      }, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [loggedIn]);
+
+  // Peer connection logic
+  function createPeer(userId, initiator) {
+    if (!stream) return;
+    const peer = new Peer({ initiator, trickle: false, stream });
+    peer.on("signal", (signal) => {
+      socketRef.current.emit("signal", { targetUserId: userId, signal });
+    });
+    peer.on("stream", (remoteStream) => {
+      setPeers((prev) => ({ ...prev, [userId]: remoteStream }));
+    });
+    peer.on("close", () => {
+      setPeers((prev) => {
+        const copy = { ...prev };
+        delete copy[userId];
+        return copy;
+      });
+    });
+    peersRef.current[userId] = peer;
+  }
+
+  // Znajdź siebie na liście graczy
+  const me = players.find(p => String(p.userId) === String(robloxId));
+  // Lista graczy w zasięgu voice (niezależnie od ptt)
+  const inRange = players.filter(p =>
+    p.position && me && distance(me.position, p.position) <= 43 && String(p.userId) !== String(robloxId)
+  );
+
+  // --- Dynamiczne zarządzanie peerami na podstawie proximity i ptt ---
+  useEffect(() => {
+    if (!loggedIn || !micAccess || !stream) return;
+    // Dla każdego gracza w zasięgu i z ptt: true
+    inRange.forEach((p) => {
+      if (p.ptt && !peersRef.current[p.userId] && String(p.userId) !== String(robloxId)) {
+        createPeer(p.userId, true);
+      }
+    });
+    // Usuwaj peer jeśli gracz wyszedł z zasięgu lub wyłączył ptt
+    Object.keys(peersRef.current).forEach((userId) => {
+      const player = players.find(p => String(p.userId) === String(userId));
+      if (!player || !player.ptt || !inRange.some(p => String(p.userId) === String(userId))) {
+        peersRef.current[userId]?.destroy();
+        delete peersRef.current[userId];
+        setPeers((prev) => {
+          const copy = { ...prev };
+          delete copy[userId];
+          return copy;
+        });
+      }
+    });
+    // eslint-disable-next-line
+  }, [players, inRange, micAccess, stream, loggedIn]);
   const [loggedIn, setLoggedIn] = useState(false);
   const [robloxName, setRobloxName] = useState("");
   const [robloxId, setRobloxId] = useState("");
