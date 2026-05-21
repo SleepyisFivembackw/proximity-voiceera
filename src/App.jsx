@@ -1,3 +1,27 @@
+  // Dynamiczne zarządzanie peerami na podstawie proximity i ptt
+  useEffect(() => {
+    if (!loggedIn || !micAccess || !stream) return;
+    // Dla każdego gracza w zasięgu i z ptt: true
+    inRange.forEach((p) => {
+      if (p.ptt && !peersRef.current[p.userId] && String(p.userId) !== String(robloxId)) {
+        createPeer(p.userId, true);
+      }
+    });
+    // Usuwaj peer jeśli gracz wyszedł z zasięgu lub wyłączył ptt
+    Object.keys(peersRef.current).forEach((userId) => {
+      const player = players.find(p => String(p.userId) === String(userId));
+      if (!player || !player.ptt || !inRange.some(p => String(p.userId) === String(userId))) {
+        peersRef.current[userId]?.destroy();
+        delete peersRef.current[userId];
+        setPeers((prev) => {
+          const copy = { ...prev };
+          delete copy[userId];
+          return copy;
+        });
+      }
+    });
+    // eslint-disable-next-line
+  }, [players, inRange, micAccess, stream, loggedIn]);
 import React, { useState, useEffect, useRef } from "react";
 import io from "socket.io-client";
 import Peer from "simple-peer";
