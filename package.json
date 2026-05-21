@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "prebuild": "chmod +x node_modules/.bin/vite",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview"
