@@ -1,5 +1,6 @@
 
-  // Dynamiczne zarządzanie peerami na podstawie proximity i ptt
+
+  // --- Dynamiczne zarządzanie peerami na podstawie proximity i ptt ---
   useEffect(() => {
     if (!loggedIn || !micAccess || !stream) return;
     // Dla każdego gracza w zasięgu i z ptt: true
