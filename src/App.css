@@ -1,0 +1,79 @@
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #181818;
+  color: #fff;
+}
+
+.container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.login-form {
+  background: #23272a;
+  padding: 2rem 2.5rem;
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 300px;
+}
+
+.login-form h2 {
+  margin: 0 0 1rem 0;
+  text-align: center;
+}
+
+.login-form input {
+  padding: 0.7rem;
+  border-radius: 6px;
+  border: none;
+  outline: none;
+  font-size: 1rem;
+}
+
+.login-form button {
+  padding: 0.7rem;
+  border-radius: 6px;
+  border: none;
+  background: #43b581;
+  color: #fff;
+  font-size: 1rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.login-form button:hover {
+  background: #389e6b;
+}
+
+.voice-connected {
+  display: flex;
+  align-items: center;
+  font-size: 1.3rem;
+  background: #23272a;
+  padding: 2rem 2.5rem;
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+  gap: 0.7rem;
+}
+
+.dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #43b581;
+  margin-right: 0.7rem;
+  animation: blink 1s infinite alternate;
+  box-shadow: 0 0 10px #43b581;
+}
+
+@keyframes blink {
+  0% { opacity: 1; box-shadow: 0 0 10px #43b581; }
+  100% { opacity: 0.3; box-shadow: 0 0 2px #43b581; }
+}
